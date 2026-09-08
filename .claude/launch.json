@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "server",
+      "runtimeExecutable": "C:\\Windows\\System32\\cmd.exe",
+      "runtimeArgs": ["/d", "/s", "/c", "set PATH=C:\\Program Files\\nodejs;%PATH% && npm run dev --workspace server"],
+      "port": 4000
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "C:\\Windows\\System32\\cmd.exe",
+      "runtimeArgs": ["/d", "/s", "/c", "set PATH=C:\\Program Files\\nodejs;%PATH% && npm run web --workspace mobile"],
+      "port": 8081
+    }
+  ]
+}

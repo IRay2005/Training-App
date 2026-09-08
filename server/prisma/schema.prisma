@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Postgres in both local dev (via docker-compose, see repo root) and
+  // production (Render). Enum-shaped fields below stay String (validated
+  // against the @ats/shared union types at the API boundary via zod) rather
+  // than native Prisma enums, so this schema doesn't need to fork per provider.
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String // "COACH" | "ATHLETE"
+  name         String
+  createdAt    DateTime @default(now())
+
+  // Set when role = COACH: athletes this coach manages
+  athletesCoached AthleteProfile[] @relation("CoachAthletes")
+
+  // Set when role = ATHLETE: this athlete's own profile
+  athleteProfile AthleteProfile? @relation("AthleteUser")
+}
+
+model AthleteProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation("AthleteUser", fields: [userId], references: [id])
+
+  coachId String
+  coach   User   @relation("CoachAthletes", fields: [coachId], references: [id])
+
+  // Section 3.1 quick-start
+  dateOfBirth             DateTime?
+  sex                     String?
+  heightCm                Float?
+  massKg                  Float?
+  medicalConditions       String?
+  medications             String?
+  injuryStatus            String?
+  trainingClearance       String?
+  trainingAgeYears        Float?
+  currentSports           String?
+  weeklyFrequency         Int?
+  avgWeeklyDurationMin    Int?
+  strengthFrequency       Int?
+  recentBreaks            String?
+  longestRecentSessionMin Int?
+  primaryGoal             String?
+  goalEventDate           DateTime?
+  minWeeklyAvailability   Int?
+  maxWeeklyAvailability   Int?
+
+  // Section 3.2 advanced (nullable, added progressively)
+  extendedHealthJson   String?
+  extendedHistoryJson  String?
+  performanceTestsJson String?
+  equipmentJson        String?
+
+  // Section 3.3 — "FOUNDATION" | "DEVELOPING" | "TRAINED" | "ADVANCED"
+  experienceClassification String @default("FOUNDATION")
+
+  // Section 26.1 — set only by the coach
+  selfManageEnabled Boolean @default(false)
+
+  hasWearable Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dailyEntries      DailyEntry[]
+  wearableMetrics   WearableDailyMetric[]
+  plannedSessions   PlannedSession[]
+  completedSessions CompletedSession[]
+  readinessReadings ReadinessReading[]
+  overrides         Override[]
+  goals             Goal[]
+}
+
+// Section 8.1 — daily 4-question entry
+model DailyEntry {
+  id        String         @id @default(cuid())
+  athleteId String
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [id])
+
+  date            DateTime
+  sorenessFatigue Int
+  stress          Int
+  moodMotivation  Int
+  hasPain         Boolean @default(false)
+  painLocation    String?
+  painSeverity    Int?
+
+  // Section 8.4 fallback — only used for athletes with hasWearable = false
+  sleepSelfReport Int?
+
+  delayedFlag Boolean  @default(false)
+  submittedAt DateTime @default(now())
+
+  @@unique([athleteId, date])
+}
+
+// Section 8.3 / 25 — wearable-sourced inputs, stub adapter populates this for now
+model WearableDailyMetric {
+  id        String         @id @default(cuid())
+  athleteId String
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [id])
+
+  date              DateTime
+  restingHeartRate  Int?
+  hrvMs             Float?
+  sleepDurationMin  Int?
+  sleepQualityScore Float?
+  bodyBatteryScore  Int?
+  source            String @default("STUB")
+
+  @@unique([athleteId, date])
+}
+
+// Section 23 — coach-entered planned week
+model PlannedSession {
+  id        String         @id @default(cuid())
+  athleteId String
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [id])
+
+  weekStartDate           DateTime
+  dayOfWeek               Int
+  modality                String
+  primaryAdaptationTarget String?
+  plannedDurationMin      Int?
+  plannedIntensityDomain  String?
+  isKeySession            Boolean @default(false)
+  notes                   String?
+
+  completedSessions CompletedSession[]
+
+  createdAt DateTime @default(now())
+}
+
+// Section 8.2 / 29.2 — completed session log
+model CompletedSession {
+  id        String         @id @default(cuid())
+  athleteId String
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [id])
+
+  plannedSessionId String?
+  plannedSession   PlannedSession? @relation(fields: [plannedSessionId], references: [id])
+
+  date            DateTime
+  modality        String
+  durationMin     Int?
+  distanceKm      Float?
+  output          Float?
+  avgHeartRate    Int?
+  sessionRpe      Int?
+  completionPct   Int?
+  painDuring      Boolean @default(false)
+  nextDayResponse String?
+  // "MANUAL" | "WEARABLE_SYNC" | "ESTIMATED"
+  sourceType      String  @default("MANUAL")
+
+  createdAt DateTime @default(now())
+}
+
+// Section 9 — overall daily readiness reading
+model ReadinessReading {
+  id        String         @id @default(cuid())
+  athleteId String
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [id])
+
+  date DateTime
+  score Int
+  // "GREEN" | "AMBER" | "RED"
+  color String
+  // "HIGH" | "MODERATE" | "LOW"
+  confidenceTier String
+  breakdownJson  String
+  overrideActive Boolean @default(false)
+  overrideReason String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([athleteId, date])
+}
+
+// Section 10.1 / 26.1 — coach or self-manage-enabled athlete override
+model Override {
+  id        String         @id @default(cuid())
+  athleteId String
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [id])
+
+  confirmedByUserId  String
+  recommendationType String
+  chosenAction       String
+  reason             String?
+
+  createdAt DateTime @default(now())
+}
+
+// Section 22.1 — goals
+model Goal {
+  id        String         @id @default(cuid())
+  athleteId String
+  athlete   AthleteProfile @relation(fields: [athleteId], references: [id])
+
+  // "PRIMARY" | "SECONDARY"
+  type           String
+  eventName      String
+  eventDate      DateTime?
+  priorityWeight Int       @default(1)
+
+  createdAt DateTime @default(now())
+}

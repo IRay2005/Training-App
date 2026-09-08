@@ -1,0 +1,41 @@
+databases:
+  - name: ats-db
+    plan: free
+    databaseName: ats
+    user: ats
+
+services:
+  # API — Fastify + Prisma. Mobile app and web app both talk to this.
+  - type: web
+    name: ats-server
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build:server && npx prisma migrate deploy --schema server/prisma/schema.prisma
+    startCommand: npm run start:server
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ats-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+
+  # Web build of the same Expo app, hosted as a static site — this is what
+  # makes the app usable on any computer from a browser, no install needed.
+  - type: web
+    name: ats-web
+    runtime: static
+    buildCommand: npm ci && npm run build:web
+    staticPublishPath: ./mobile/dist
+    envVars:
+      # Update this after the ats-server service above has a live URL
+      # (Render shows it on the service page — usually https://ats-server.onrender.com).
+      - key: EXPO_PUBLIC_API_URL
+        value: https://ats-server.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

@@ -1,0 +1,30 @@
+node_modules/
+dist/
+build/
+.expo/
+.expo-shared/
+*.log
+.env
+.env.local
+.env.*.local
+server/prisma/dev.db
+server/prisma/dev.db-journal
+.DS_Store
+
+# Local, machine-specific Claude Code settings
+.claude/settings.local.json
+
+# Secrets / signing material — never commit these
+developer_key
+*.pem
+*.p12
+*.keystore
+*.jks
+
+# EAS / native build output
+mobile/android/
+mobile/ios/
+*.apk
+*.aab
+*.ipa
+
