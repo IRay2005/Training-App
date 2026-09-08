@@ -1,28 +1,27 @@
-# Deploying the app
+# Getting this app onto your phone and computer
 
-This turns the local project into something you can actually use: a live
-server, a website usable from any computer, and an installable Android app.
-The pieces:
+Right now the app only runs on this laptop. To make it a real app you can
+install and use anywhere, you need to do 4 things, in order. Each one takes
+a few minutes. I've already written all the config files — you just need to
+click through some sign-ups and run some commands.
 
-- **Server** — deploys to [Render](https://render.com) (free tier), using
-  `render.yaml` in this repo. Render also hosts the web build.
-- **Web** — the same Expo app, exported to static HTML/JS and hosted as a
-  Render static site. Works on any computer, and on iPhone via
-  "Add to Home Screen".
-- **Android** — built as a real installable `.apk` via
-  [EAS Build](https://docs.expo.dev/build/introduction/) (Expo's free cloud
-  build service). No Play Store needed.
-- **iOS native install** — skipped. Sideloading an `.ipa` without a Mac
-  requires a paid Apple Developer account ($99/yr). The web app covers iOS
-  in the meantime (see below).
+**Quick definitions** (skip if you already know these):
 
-None of the accounts below can be created on your behalf — you'll need to
-sign up yourself (a few minutes each), then hand control back for the actual
-deploy commands where noted.
+| Term | What it means here |
+|---|---|
+| **Render** | A free website that runs your server 24/7, so your phone/computer can talk to it over the internet instead of only on this laptop. |
+| **GitHub** | Where your code lives online. Render reads your code from here. |
+| **EAS / Expo** | The service that turns your app into a real installable Android file (`.apk`), so you don't need the Google Play Store. |
+| **APK** | The Android install file — like a `.exe` on Windows, but for Android phones. |
+| **Postgres** | The database that stores your users and training data. |
 
-## 1. Push this repo to GitHub
+---
 
-Render deploys from a Git repo.
+## ✅ Step 1 — Put your code on GitHub
+
+*Why: Render needs to read your code from somewhere online — it can't see your laptop.*
+
+Run this in the project folder:
 
 ```bash
 git init
@@ -30,51 +29,34 @@ git add .
 git commit -m "Initial commit"
 ```
 
-Then create an empty repo at https://github.com/new (don't initialize it
-with a README), and:
+Then:
+1. Go to **https://github.com/new**, create a new repo (leave it empty — don't check "add a README").
+2. GitHub will show you a URL like `https://github.com/yourname/your-repo.git`. Copy it.
+3. Run, replacing the URL with yours:
 
 ```bash
-git remote add origin https://github.com/<you>/<repo-name>.git
+git remote add origin https://github.com/yourname/your-repo.git
 git branch -M main
 git push -u origin main
 ```
 
-## 2. Deploy the server + web site to Render
+---
 
-1. Sign up at https://render.com (free) and connect your GitHub account.
-2. Dashboard → **New +** → **Blueprint** → pick this repo. Render reads
-   `render.yaml` and creates three resources: `ats-db` (Postgres),
-   `ats-server` (the API), and `ats-web` (the static website).
-3. Click **Apply** and wait for both services to finish deploying.
-4. Open the `ats-server` service page and copy its URL (something like
-   `https://ats-server.onrender.com`, possibly with a random suffix if that
-   name was taken).
-5. If the URL differs from the placeholder, update it in two places and
-   push:
-   - [render.yaml](render.yaml) — the `EXPO_PUBLIC_API_URL` value under the
-     `ats-web` service
-   - [mobile/eas.json](mobile/eas.json) — both `preview` and `production`
-     profiles
+## ✅ Step 2 — Turn on the server (Render)
 
-   ```bash
-   git add render.yaml mobile/eas.json
-   git commit -m "Point web/mobile builds at the deployed server URL"
-   git push
-   ```
+*Why: this is what makes the app "live" — without it, nothing works, not the phone app or the website.*
 
-   Render redeploys `ats-web` automatically on push (Blueprint services stay
-   in sync with `render.yaml`).
+1. Sign up free at **https://render.com** and connect it to your GitHub account.
+2. Click **New +** → **Blueprint** → choose the repo you just pushed.
+3. Render finds the `render.yaml` file already in this project and automatically sets up 3 things for you: the database, the server, and the website. Click **Apply**.
+4. Wait a few minutes for it to finish (you'll see green "Live" statuses).
+5. Click into the service named **ats-server** and copy its web address at the top — it'll look like `https://ats-server.onrender.com` (Render sometimes adds random letters if that name's taken).
 
-**Free-tier note:** the free Postgres database is deleted after 90 days
-unless upgraded to a paid plan; the free web service also spins down after
-15 minutes of inactivity and takes ~30s to wake back up on the next request.
-Fine for personal/small-group use; upgrade the relevant Render plan if that
-becomes annoying.
+**If your address is different from `https://ats-server.onrender.com`**, tell me the real one and I'll update the two config files that reference it ([render.yaml](render.yaml) and [mobile/eas.json](mobile/eas.json)) — otherwise the phone app and website won't be able to find your server.
 
-### Create the first coach account
+### Create your login
 
-There's no sign-up screen yet — only login (`mobile/src/screens/LoginScreen.tsx`).
-Create the first account directly against the deployed API:
+There's no "Sign Up" button yet — the first account has to be created with one command. Run this once (swap in your own email/password/name):
 
 ```bash
 curl -X POST https://ats-server.onrender.com/auth/register-coach \
@@ -82,39 +64,59 @@ curl -X POST https://ats-server.onrender.com/auth/register-coach \
   -d '{"email":"you@example.com","password":"choose-a-real-password","name":"Your Name"}'
 ```
 
-That account can then log in from the mobile app or the website, and (per
-`mobile/src/api.ts`'s `inviteAthlete`) invite athletes from the coach
-dashboard.
+That's now your login for the app (as a coach). Coaches can invite athletes later from inside the app.
 
-## 3. Build the installable Android app
+> **Good to know:** on Render's free plan, the server "falls asleep" after 15 minutes of no use and takes ~30 seconds to wake up on the next request. The free database also gets deleted after 90 days unless you upgrade. Fine for now — just know it's not lost forever, just a free-tier limitation.
+
+---
+
+## ✅ Step 3 — Get an installable Android app
+
+*Why: this produces the actual file you download onto an Android phone.*
 
 ```bash
 npm install -g eas-cli
 cd mobile
-eas login              # creates/uses your free Expo account
-eas build:configure    # links this project to your Expo account, sets a real EAS project ID in app.json
+eas login
+eas build:configure
 eas build --platform android --profile production
 ```
 
-EAS builds in the cloud (a few minutes) and gives you a download link for a
-signed `.apk`. Open that link on an Android phone to download and install it
-directly — no Play Store required. Android will prompt to allow installs
-from that source the first time.
+- `eas login` — makes/uses a free Expo account (sign up if it asks).
+- `eas build:configure` — one-time setup, just press enter through its prompts.
+- `eas build` — this is the one that takes a few minutes. When it finishes, it prints a **link**.
 
-## 4. Use it on iPhone / iPad
+Open that link **on the Android phone itself** (email it to yourself, or open it in the phone's browser) and tap it to download and install. Android will ask to "allow installs from this source" the first time — say yes.
 
-Open the `ats-web` URL from Render in Safari, then **Share → Add to Home
-Screen**. It behaves like an installed app (own icon, launches without
-Safari's UI) even without going through the App Store.
+---
 
-## 5. Use it on a computer
+## ✅ Step 4 — iPhone and computer (no extra steps needed)
 
-Just open the `ats-web` Render URL in any browser.
+These don't need installing anything — they just use the website Render built for you (the `ats-web` service from Step 2). Find its URL on the Render dashboard.
 
-## Local development (unchanged, but now uses Postgres instead of SQLite)
+- **On a computer:** open that URL in any browser. Done.
+- **On an iPhone:** open that URL in Safari, tap the **Share** icon, then **Add to Home Screen**. It now behaves like an installed app with its own icon.
+
+(iPhone can't get a "real" installed app like Android without a paid $99/year Apple developer account — the home-screen shortcut is the free equivalent.)
+
+---
+
+## Recap: what you actually have to go do right now
+
+1. Push code to GitHub (Step 1)
+2. Sign up for Render, click "Apply" on the Blueprint, copy the server URL (Step 2)
+3. Run the one `curl` command to create your login (Step 2)
+4. Sign up for Expo, run the 3 `eas` commands, install the APK on your phone (Step 3)
+5. Bookmark/add-to-home-screen the website URL on your computer and iPhone (Step 4)
+
+Everything else (the actual config) is already done.
+
+---
+
+## Local development (only if you want to keep coding on this laptop)
 
 ```bash
-docker compose up -d          # starts local Postgres (see docker-compose.yml)
+docker compose up -d          # starts a local database
 npm install
 npx prisma migrate deploy --schema server/prisma/schema.prisma
 npm run dev:server
